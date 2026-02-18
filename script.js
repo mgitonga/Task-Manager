@@ -7,6 +7,7 @@
 const taskForm = document.getElementById('task-form');
 const taskInput = document.getElementById('task-input');
 const dueDateInput = document.getElementById('due-date-input');
+const dueTimeInput = document.getElementById('due-time-input');
 const taskList = document.getElementById('task-list');
 const dueTodayList = document.getElementById('due-today-list');
 const dueTodaySection = document.getElementById('due-today-section');
@@ -68,20 +69,23 @@ function generateId() {
  * Add a new task
  * @param {string} text - Task description
  * @param {string|null} dueDate - Optional due date (YYYY-MM-DD format)
+ * @param {string|null} dueTime - Optional due time (HH:MM format)
  */
-function addTask(text, dueDate = null) {
+function addTask(text, dueDate = null, dueTime = null) {
     const task = {
         id: generateId(),
         text: text.trim(),
         completed: false,
         dueDate: dueDate || null,
+        dueTime: dueTime || null,
         createdAt: new Date().toISOString()
     };
     
     tasks.unshift(task); // Add to beginning of array
     saveTasks();
     renderTasks();
-    announceToScreenReader(`Task "${text}" added${dueDate ? ` with due date ${formatDateForDisplay(dueDate)}` : ''}`);
+    const dueDateTimeStr = formatDateTimeForDisplay(dueDate, dueTime);
+    announceToScreenReader(`Task "${text}" added${dueDateTimeStr ? ` due ${dueDateTimeStr}` : ''}`);
 }
 
 /**
@@ -110,6 +114,114 @@ function toggleTask(id) {
         renderTasks();
         announceToScreenReader(`Task "${task.text}" marked as ${task.completed ? 'completed' : 'active'}`);
     }
+}
+
+/**
+ * Update a task's properties
+ * @param {string} id - Task ID to update
+ * @param {Object} updates - Object with properties to update
+ */
+function updateTask(id, updates) {
+    const task = tasks.find(t => t.id === id);
+    if (task) {
+        Object.assign(task, updates);
+        saveTasks();
+        renderTasks();
+        announceToScreenReader(`Task updated`);
+    }
+}
+
+/**
+ * Enter edit mode for a task
+ * @param {string} id - Task ID to edit
+ */
+function enterEditMode(id) {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    
+    const taskItem = document.querySelector(`.task-item[data-id="${id}"]`);
+    if (!taskItem) return;
+    
+    taskItem.classList.add('editing');
+    
+    const taskContent = taskItem.querySelector('.task-content');
+    const originalText = task.text;
+    const originalDueDate = task.dueDate || '';
+    const originalDueTime = task.dueTime || '';
+    
+    // Build time options for select
+    const timeOptions = ['<option value="">Time</option>'];
+    for (let h = 0; h < 24; h++) {
+        for (let m = 0; m < 60; m += 30) {
+            const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+            const selected = time === originalDueTime ? ' selected' : '';
+            timeOptions.push(`<option value="${time}"${selected}>${time}</option>`);
+        }
+    }
+    
+    taskContent.innerHTML = `
+        <div class="edit-form">
+            <input 
+                type="text" 
+                class="edit-input" 
+                value="${escapeHtml(originalText)}"
+                aria-label="Edit task text"
+            >
+            <div class="edit-datetime">
+                <input 
+                    type="date" 
+                    class="edit-date" 
+                    value="${originalDueDate}"
+                    aria-label="Edit due date"
+                >
+                <select class="edit-time" aria-label="Edit due time">
+                    ${timeOptions.join('')}
+                </select>
+            </div>
+            <div class="edit-actions">
+                <button type="button" class="save-edit-btn" aria-label="Save changes">Save</button>
+                <button type="button" class="cancel-edit-btn" aria-label="Cancel editing">Cancel</button>
+            </div>
+        </div>
+    `;
+    
+    const editInput = taskContent.querySelector('.edit-input');
+    const editDate = taskContent.querySelector('.edit-date');
+    const editTime = taskContent.querySelector('.edit-time');
+    const saveBtn = taskContent.querySelector('.save-edit-btn');
+    const cancelBtn = taskContent.querySelector('.cancel-edit-btn');
+    
+    editInput.focus();
+    editInput.select();
+    
+    const saveChanges = () => {
+        const newText = editInput.value.trim();
+        if (newText) {
+            updateTask(id, {
+                text: newText,
+                dueDate: editDate.value || null,
+                dueTime: editTime.value || null
+            });
+        } else {
+            renderTasks(); // Revert if empty
+        }
+    };
+    
+    const cancelEdit = () => {
+        renderTasks();
+    };
+    
+    saveBtn.addEventListener('click', saveChanges);
+    cancelBtn.addEventListener('click', cancelEdit);
+    
+    editInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveChanges();
+        } else if (e.key === 'Escape') {
+            cancelEdit();
+        }
+    });
 }
 
 /**
@@ -209,6 +321,55 @@ function formatDateForDisplay(dateString) {
     });
 }
 
+/**
+ * Format time for display (24-hour format)
+ * @param {string} timeString - Time in HH:MM format
+ * @returns {string} Formatted time string
+ */
+function formatTimeForDisplay(timeString) {
+    if (!timeString) return '';
+    return timeString; // Already in 24-hour HH:MM format
+}
+
+/**
+ * Format date and time together for display
+ * @param {string|null} dateString - Date in YYYY-MM-DD format
+ * @param {string|null} timeString - Time in HH:MM format
+ * @returns {string} Formatted date/time string
+ */
+function formatDateTimeForDisplay(dateString, timeString) {
+    const datePart = formatDateForDisplay(dateString);
+    const timePart = formatTimeForDisplay(timeString);
+    
+    if (datePart && timePart) return `${datePart} at ${timePart}`;
+    if (datePart) return datePart;
+    if (timePart) return `at ${timePart}`;
+    return '';
+}
+
+/**
+ * Get the time-based urgency status of a task
+ * @param {Object} task - Task object
+ * @returns {string|null} 'time-imminent' (< 30 min), 'time-approaching' (< 1 hour), or null
+ */
+function getTimeStatus(task) {
+    if (!task.dueDate || !task.dueTime || task.completed) return null;
+    
+    const now = new Date();
+    const [hours, minutes] = task.dueTime.split(':').map(Number);
+    const dueDateTime = new Date(task.dueDate + 'T00:00:00');
+    dueDateTime.setHours(hours, minutes, 0, 0);
+    
+    const diffMs = dueDateTime.getTime() - now.getTime();
+    const diffMinutes = diffMs / (1000 * 60);
+    
+    // Only show alert for tasks due within the next hour and not overdue
+    if (diffMinutes < 0) return null; // Already passed
+    if (diffMinutes <= 30) return 'time-imminent';
+    if (diffMinutes <= 60) return 'time-approaching';
+    return null;
+}
+
 // ===== Filtering =====
 /**
  * Get filtered tasks based on current filter
@@ -299,21 +460,36 @@ function renderTasks() {
 function createTaskElement(task) {
     const li = document.createElement('li');
     const dueDateStatus = getDueDateStatus(task);
+    const timeStatus = getTimeStatus(task);
     let className = 'task-item';
     if (task.completed) className += ' completed';
     if (dueDateStatus) className += ` ${dueDateStatus}`;
+    if (timeStatus) className += ` ${timeStatus}`;
     li.className = className;
     li.dataset.id = task.id;
     
-    // Build due date badge HTML
+    // Build due date/time badge HTML
     let dueDateHtml = '';
-    if (task.dueDate) {
+    if (task.dueDate || task.dueTime) {
         const statusClass = dueDateStatus ? ` ${dueDateStatus}` : '';
-        const formattedDate = formatDateForDisplay(task.dueDate);
+        const formattedDateTime = formatDateTimeForDisplay(task.dueDate, task.dueTime);
+        
+        // Build bell notification if time is approaching
+        let bellHtml = '';
+        if (timeStatus) {
+            const urgentClass = timeStatus === 'time-imminent' ? ' urgent' : '';
+            bellHtml = `
+                <span class="reminder-alert${urgentClass}" aria-label="Reminder: task due soon">
+                    <span class="bell-icon" aria-hidden="true">🔔</span>
+                </span>
+            `;
+        }
+        
         dueDateHtml = `
-            <span class="due-date-badge${statusClass}" aria-label="Due ${formattedDate}">
+            <span class="due-date-badge${statusClass}" aria-label="Due ${formattedDateTime}">
                 <span class="due-icon" aria-hidden="true">📅</span>
-                ${formattedDate}
+                ${formattedDateTime}
+                ${bellHtml}
             </span>
         `;
     }
@@ -331,18 +507,30 @@ function createTaskElement(task) {
             <span class="task-text">${escapeHtml(task.text)}</span>
             ${dueDateHtml}
         </div>
-        <button 
-            class="delete-btn" 
-            aria-label="Delete task: ${escapeHtml(task.text)}"
-            title="Delete task"
-        >
-            ×
-        </button>
+        <div class="task-actions-btns">
+            <button 
+                class="edit-btn" 
+                aria-label="Edit task: ${escapeHtml(task.text)}"
+                title="Edit task"
+            >
+                ✏️
+            </button>
+            <button 
+                class="delete-btn" 
+                aria-label="Delete task: ${escapeHtml(task.text)}"
+                title="Delete task"
+            >
+                ×
+            </button>
+        </div>
     `;
     
     // Add event listeners
     const checkbox = li.querySelector('input[type="checkbox"]');
     checkbox.addEventListener('change', () => toggleTask(task.id));
+    
+    const editBtn = li.querySelector('.edit-btn');
+    editBtn.addEventListener('click', () => enterEditMode(task.id));
     
     const deleteBtn = li.querySelector('.delete-btn');
     deleteBtn.addEventListener('click', () => deleteTask(task.id));
@@ -413,9 +601,11 @@ taskForm.addEventListener('submit', (e) => {
     
     taskInput.removeAttribute('aria-invalid');
     const dueDate = dueDateInput.value || null;
-    addTask(text, dueDate);
+    const dueTime = dueTimeInput.value || null;
+    addTask(text, dueDate, dueTime);
     taskInput.value = '';
     dueDateInput.value = '';
+    dueTimeInput.value = '';
     taskInput.focus();
 });
 
@@ -482,6 +672,14 @@ function init() {
     loadTheme();
     loadTasks();
     renderTasks();
+    
+    // Periodically check for time-based reminders (every minute)
+    setInterval(() => {
+        const hasUpcomingTasks = tasks.some(t => getTimeStatus(t) !== null);
+        if (hasUpcomingTasks) {
+            renderTasks();
+        }
+    }, 60000); // Check every minute
     
     // Focus on input for immediate use
     taskInput.focus();
