@@ -298,7 +298,7 @@ function renderTasks() {
  */
 function createTaskElement(task) {
     const li = document.createElement('li');
-                <span class="due-icon">📅</span>
+    const dueDateStatus = getDueDateStatus(task);
     let className = 'task-item';
     if (task.completed) className += ' completed';
     if (dueDateStatus) className += ` ${dueDateStatus}`;
