@@ -8,11 +8,17 @@ const taskForm = document.getElementById('task-form');
 const taskInput = document.getElementById('task-input');
 const dueDateInput = document.getElementById('due-date-input');
 const dueTimeInput = document.getElementById('due-time-input');
+const effortInput = document.getElementById('effort-input');
 const taskList = document.getElementById('task-list');
 const dueTodayList = document.getElementById('due-today-list');
 const dueTodaySection = document.getElementById('due-today-section');
+const pastDueList = document.getElementById('past-due-list');
+const pastDueSection = document.getElementById('past-due-section');
+const upcomingList = document.getElementById('upcoming-list');
+const upcomingSection = document.getElementById('upcoming-section');
+const completedList = document.getElementById('completed-list');
+const completedSection = document.getElementById('completed-section');
 const emptyState = document.getElementById('empty-state');
-const clearCompletedBtn = document.getElementById('clear-completed');
 const filterButtons = document.querySelectorAll('.filter-btn');
 const themeToggle = document.getElementById('theme-toggle');
 
@@ -21,6 +27,9 @@ const countAll = document.getElementById('count-all');
 const countActive = document.getElementById('count-active');
 const countCompleted = document.getElementById('count-completed');
 const countDueToday = document.getElementById('count-due-today');
+const countPastDue = document.getElementById('count-past-due');
+const countUpcoming = document.getElementById('count-upcoming');
+const countCompletedSection = document.getElementById('count-completed-section');
 
 // ===== State =====
 let tasks = [];
@@ -29,6 +38,7 @@ let currentFilter = 'all';
 // ===== Local Storage =====
 const STORAGE_KEY = 'taskManager_tasks';
 const THEME_KEY = 'taskManager_theme';
+const COLLAPSED_KEY = 'taskManager_collapsed';
 
 /**
  * Load tasks from local storage
@@ -70,14 +80,16 @@ function generateId() {
  * @param {string} text - Task description
  * @param {string|null} dueDate - Optional due date (YYYY-MM-DD format)
  * @param {string|null} dueTime - Optional due time (HH:MM format)
+ * @param {number|null} effort - Optional level of effort in hours
  */
-function addTask(text, dueDate = null, dueTime = null) {
+function addTask(text, dueDate = null, dueTime = null, effort = null) {
     const task = {
         id: generateId(),
         text: text.trim(),
         completed: false,
         dueDate: dueDate || null,
         dueTime: dueTime || null,
+        effort: effort || null,
         createdAt: new Date().toISOString()
     };
     
@@ -85,7 +97,8 @@ function addTask(text, dueDate = null, dueTime = null) {
     saveTasks();
     renderTasks();
     const dueDateTimeStr = formatDateTimeForDisplay(dueDate, dueTime);
-    announceToScreenReader(`Task "${text}" added${dueDateTimeStr ? ` due ${dueDateTimeStr}` : ''}`);
+    const effortStr = effort ? ` (${effort}h effort)` : '';
+    announceToScreenReader(`Task "${text}" added${dueDateTimeStr ? ` due ${dueDateTimeStr}` : ''}${effortStr}`);
 }
 
 /**
@@ -148,6 +161,7 @@ function enterEditMode(id) {
     const originalText = task.text;
     const originalDueDate = task.dueDate || '';
     const originalDueTime = task.dueTime || '';
+    const originalEffort = task.effort || '';
     
     // Build time options for select
     const timeOptions = ['<option value="">Time</option>'];
@@ -177,6 +191,16 @@ function enterEditMode(id) {
                 <select class="edit-time" aria-label="Edit due time">
                     ${timeOptions.join('')}
                 </select>
+                <input 
+                    type="number" 
+                    class="edit-effort" 
+                    value="${originalEffort}"
+                    placeholder="Hrs"
+                    min="0.5"
+                    max="100"
+                    step="0.5"
+                    aria-label="Edit effort in hours"
+                >
             </div>
             <div class="edit-actions">
                 <button type="button" class="save-edit-btn" aria-label="Save changes">Save</button>
@@ -188,6 +212,7 @@ function enterEditMode(id) {
     const editInput = taskContent.querySelector('.edit-input');
     const editDate = taskContent.querySelector('.edit-date');
     const editTime = taskContent.querySelector('.edit-time');
+    const editEffort = taskContent.querySelector('.edit-effort');
     const saveBtn = taskContent.querySelector('.save-edit-btn');
     const cancelBtn = taskContent.querySelector('.cancel-edit-btn');
     
@@ -200,7 +225,8 @@ function enterEditMode(id) {
             updateTask(id, {
                 text: newText,
                 dueDate: editDate.value || null,
-                dueTime: editTime.value || null
+                dueTime: editTime.value || null,
+                effort: editEffort.value ? parseFloat(editEffort.value) : null
             });
         } else {
             renderTasks(); // Revert if empty
@@ -224,19 +250,6 @@ function enterEditMode(id) {
     });
 }
 
-/**
- * Clear all completed tasks
- */
-function clearCompleted() {
-    const completedCount = tasks.filter(t => t.completed).length;
-    if (completedCount > 0) {
-        tasks = tasks.filter(t => !t.completed);
-        saveTasks();
-        renderTasks();
-        announceToScreenReader(`${completedCount} completed task${completedCount > 1 ? 's' : ''} cleared`);
-    }
-}
-
 // ===== Due Date Helpers =====
 /**
  * Get today's date as YYYY-MM-DD string
@@ -244,7 +257,11 @@ function clearCompleted() {
  */
 function getTodayString() {
     const today = new Date();
-    return today.toISOString().split('T')[0];
+    // Use local date components to match HTML date input format
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 /**
@@ -255,17 +272,13 @@ function getTodayString() {
 function getDueDateStatus(task) {
     if (!task.dueDate || task.completed) return null;
 
-    // Use UTC-based dates to avoid timezone-related off-by-one errors
+    // Use local dates to match HTML date input format
     const now = new Date();
-    const todayUtc = new Date(Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate()
-    ));
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const [yearStr, monthStr, dayStr] = task.dueDate.split('-');
     const year = Number(yearStr);
-    const monthIndex = Number(monthStr) - 1; // Month is zero-based in Date.UTC
+    const monthIndex = Number(monthStr) - 1; // Month is zero-based
     const day = Number(dayStr);
 
     // Guard against invalid date components
@@ -273,9 +286,9 @@ function getDueDateStatus(task) {
         return null;
     }
 
-    const dueDateUtc = new Date(Date.UTC(year, monthIndex, day));
-    const diffTime = dueDateUtc.getTime() - todayUtc.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const dueDate = new Date(year, monthIndex, day);
+    const diffTime = dueDate.getTime() - today.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     if (diffDays < 0) return 'overdue';
     if (diffDays === 0) return 'due-today';
     if (diffDays <= 3) return 'approaching';
@@ -413,12 +426,38 @@ function renderTasks() {
     // Clear existing tasks
     taskList.innerHTML = '';
     dueTodayList.innerHTML = '';
+    pastDueList.innerHTML = '';
+    upcomingList.innerHTML = '';
+    completedList.innerHTML = '';
     
     // Update counts
     updateCounts();
     
-    // Get tasks due today (not completed)
-    const tasksDueToday = tasks.filter(t => isDueToday(t));
+    // Separate completed and active tasks
+    const completedTasks = filteredTasks.filter(t => t.completed);
+    const activeTasks = filteredTasks.filter(t => !t.completed);
+    
+    // Categorize active tasks by due date status
+    const tasksDueToday = activeTasks.filter(t => isDueToday(t));
+    const tasksPastDue = activeTasks.filter(t => getDueDateStatus(t) === 'overdue');
+    const tasksUpcoming = activeTasks.filter(t => {
+        const status = getDueDateStatus(t);
+        return t.dueDate && !isDueToday(t) && status !== 'overdue';
+    });
+    // Tasks with no due date
+    const tasksOther = activeTasks.filter(t => {
+        return !isDueToday(t) && getDueDateStatus(t) !== 'overdue' && !t.dueDate;
+    });
+    
+    // Show/hide Past Due section
+    if (tasksPastDue.length > 0) {
+        pastDueSection.classList.remove('hidden');
+        tasksPastDue.forEach(task => {
+            pastDueList.appendChild(createTaskElement(task));
+        });
+    } else {
+        pastDueSection.classList.add('hidden');
+    }
     
     // Show/hide Due Today section
     if (tasksDueToday.length > 0) {
@@ -430,26 +469,42 @@ function renderTasks() {
         dueTodaySection.classList.add('hidden');
     }
     
-    // Filter out tasks that are shown in Due Today section (to avoid duplicates)
-    const mainListTasks = filteredTasks.filter(t => !isDueToday(t));
+    // Show/hide Upcoming section
+    if (tasksUpcoming.length > 0) {
+        upcomingSection.classList.remove('hidden');
+        tasksUpcoming.forEach(task => {
+            upcomingList.appendChild(createTaskElement(task));
+        });
+    } else {
+        upcomingSection.classList.add('hidden');
+    }
+    
+    // Show/hide Completed section
+    if (completedTasks.length > 0) {
+        completedSection.classList.remove('hidden');
+        completedTasks.forEach(task => {
+            completedList.appendChild(createTaskElement(task));
+        });
+    } else {
+        completedSection.classList.add('hidden');
+    }
+    
+    // Show tasks with no due date in main list
+    const hasAnyTasks = tasksDueToday.length > 0 || tasksPastDue.length > 0 || tasksUpcoming.length > 0 || tasksOther.length > 0 || completedTasks.length > 0;
     
     // Show/hide empty state
-    if (mainListTasks.length === 0 && tasksDueToday.length === 0) {
+    if (!hasAnyTasks) {
         emptyState.classList.remove('hidden');
         taskList.setAttribute('aria-hidden', 'true');
     } else {
         emptyState.classList.add('hidden');
         taskList.removeAttribute('aria-hidden');
         
-        // Render each task in main list
-        mainListTasks.forEach(task => {
+        // Render tasks with no due date in main list
+        tasksOther.forEach(task => {
             taskList.appendChild(createTaskElement(task));
         });
     }
-    
-    // Update clear completed button state
-    const hasCompleted = tasks.some(t => t.completed);
-    clearCompletedBtn.disabled = !hasCompleted;
 }
 
 /**
@@ -494,6 +549,17 @@ function createTaskElement(task) {
         `;
     }
     
+    // Build effort badge HTML
+    let effortHtml = '';
+    if (task.effort) {
+        effortHtml = `
+            <span class="effort-badge" aria-label="${task.effort} hours effort">
+                <span class="effort-icon" aria-hidden="true">⏱️</span>
+                ${task.effort}h
+            </span>
+        `;
+    }
+    
     li.innerHTML = `
         <label class="task-checkbox">
             <input 
@@ -505,7 +571,10 @@ function createTaskElement(task) {
         </label>
         <div class="task-content">
             <span class="task-text">${escapeHtml(task.text)}</span>
-            ${dueDateHtml}
+            <div class="task-meta">
+                ${dueDateHtml}
+                ${effortHtml}
+            </div>
         </div>
         <div class="task-actions-btns">
             <button 
@@ -546,11 +615,19 @@ function updateCounts() {
     const active = tasks.filter(t => !t.completed).length;
     const completed = tasks.filter(t => t.completed).length;
     const dueToday = tasks.filter(t => isDueToday(t)).length;
+    const pastDue = tasks.filter(t => getDueDateStatus(t) === 'overdue').length;
+    const upcoming = tasks.filter(t => {
+        const status = getDueDateStatus(t);
+        return t.dueDate && !isDueToday(t) && status !== 'overdue' && !t.completed;
+    }).length;
     
     countAll.textContent = all;
     countActive.textContent = active;
     countCompleted.textContent = completed;
     countDueToday.textContent = dueToday;
+    countPastDue.textContent = pastDue;
+    countUpcoming.textContent = upcoming;
+    countCompletedSection.textContent = completed;
 }
 
 // ===== Utility Functions =====
@@ -602,10 +679,12 @@ taskForm.addEventListener('submit', (e) => {
     taskInput.removeAttribute('aria-invalid');
     const dueDate = dueDateInput.value || null;
     const dueTime = dueTimeInput.value || null;
-    addTask(text, dueDate, dueTime);
+    const effort = effortInput.value ? parseFloat(effortInput.value) : null;
+    addTask(text, dueDate, dueTime, effort);
     taskInput.value = '';
     dueDateInput.value = '';
     dueTimeInput.value = '';
+    effortInput.value = '';
     taskInput.focus();
 });
 
@@ -615,9 +694,6 @@ filterButtons.forEach(btn => {
         setFilter(btn.dataset.filter);
     });
 });
-
-// Clear completed button
-clearCompletedBtn.addEventListener('click', clearCompleted);
 
 // Theme toggle
 themeToggle.addEventListener('click', toggleTheme);
@@ -667,14 +743,88 @@ function toggleTheme() {
     }
 }
 
+// ===== Collapsible Sections =====
+/**
+ * Load collapsed sections state from localStorage
+ */
+function loadCollapsedSections() {
+    try {
+        const stored = localStorage.getItem(COLLAPSED_KEY);
+        if (stored) {
+            const collapsedIds = JSON.parse(stored);
+            collapsedIds.forEach(id => {
+                const section = document.getElementById(id);
+                if (section) {
+                    section.classList.add('collapsed');
+                    const button = section.querySelector('.section-title');
+                    if (button) {
+                        button.setAttribute('aria-expanded', 'false');
+                    }
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error loading collapsed sections:', error);
+    }
+}
+
+/**
+ * Save collapsed sections state to localStorage
+ */
+function saveCollapsedSections() {
+    try {
+        const collapsedSections = document.querySelectorAll('.collapsible-section.collapsed');
+        const collapsedIds = Array.from(collapsedSections).map(s => s.id);
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify(collapsedIds));
+    } catch (error) {
+        console.error('Error saving collapsed sections:', error);
+    }
+}
+
+/**
+ * Setup collapsible section toggle handlers
+ */
+function setupCollapsibleSections() {
+    const sections = document.querySelectorAll('.collapsible-section');
+    
+    sections.forEach(section => {
+        const button = section.querySelector('.section-title');
+        if (button) {
+            button.addEventListener('click', () => {
+                const isCollapsed = section.classList.toggle('collapsed');
+                button.setAttribute('aria-expanded', !isCollapsed);
+                saveCollapsedSections();
+                
+                const sectionName = section.querySelector('.section-label')?.textContent || 'Section';
+                announceToScreenReader(`${sectionName} ${isCollapsed ? 'collapsed' : 'expanded'}`);
+            });
+        }
+    });
+}
+
 // ===== Initialization =====
 function init() {
     loadTheme();
     loadTasks();
+    loadCollapsedSections();
+    setupCollapsibleSections();
     renderTasks();
     
-    // Periodically check for time-based reminders (every minute)
+    // Track the current date to detect date changes
+    let lastDateString = getTodayString();
+    
+    // Periodically check for time-based reminders and date changes (every minute)
     setInterval(() => {
+        const currentDateString = getTodayString();
+        
+        // If the date has changed (e.g., crossed midnight), re-render all tasks
+        if (currentDateString !== lastDateString) {
+            lastDateString = currentDateString;
+            renderTasks();
+            return;
+        }
+        
+        // Re-render if there are any tasks with time-based urgency
         const hasUpcomingTasks = tasks.some(t => getTimeStatus(t) !== null);
         if (hasUpcomingTasks) {
             renderTasks();

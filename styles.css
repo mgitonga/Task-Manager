@@ -191,12 +191,14 @@ main {
 
 /* ===== Due Date Input ===== */
 .due-date-group,
-.due-time-group {
+.due-time-group,
+.effort-group {
     flex-shrink: 0;
 }
 
 #due-date-input,
-#due-time-input {
+#due-time-input,
+#effort-input {
     padding: 0.875rem 1rem;
     font-size: 1rem;
     border: 2px solid var(--border-color);
@@ -205,6 +207,16 @@ main {
     color: var(--text-primary);
     cursor: pointer;
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+#effort-input {
+    width: 80px;
+    text-align: center;
+}
+
+#effort-input::placeholder {
+    color: var(--text-muted);
+    font-size: 0.875rem;
 }
 
 #due-time-input {
@@ -219,12 +231,14 @@ main {
 }
 
 #due-date-input:hover,
-#due-time-input:hover {
+#due-time-input:hover,
+#effort-input:hover {
     border-color: var(--text-muted);
 }
 
 #due-date-input:focus,
-#due-time-input:focus {
+#due-time-input:focus,
+#effort-input:focus {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px var(--primary-light);
@@ -289,6 +303,30 @@ main {
     color: var(--text-secondary);
 }
 
+/* ===== Past Due Section ===== */
+.past-due-section {
+    background: var(--overdue-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+    border: 2px solid var(--overdue-color);
+}
+
+.past-due-section.hidden {
+    display: none;
+}
+
+.past-due-section .section-title {
+    color: var(--overdue-color);
+    background: rgba(236, 72, 153, 0.1);
+    border-bottom: 1px solid rgba(236, 72, 153, 0.2);
+}
+
+.past-due-section .section-title .count {
+    background: var(--overdue-color);
+    color: white;
+}
+
 /* ===== Due Today Section ===== */
 .due-today-section {
     background: var(--today-light);
@@ -302,6 +340,54 @@ main {
     display: none;
 }
 
+/* ===== Upcoming Section ===== */
+.upcoming-section {
+    background: var(--warning-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+    border: 2px solid var(--warning-color);
+}
+
+.upcoming-section.hidden {
+    display: none;
+}
+
+.upcoming-section .section-title {
+    color: var(--warning-color);
+    background: rgba(245, 158, 11, 0.1);
+    border-bottom: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.upcoming-section .section-title .count {
+    background: var(--warning-color);
+    color: white;
+}
+
+/* ===== Completed Section ===== */
+.completed-section {
+    background: var(--success-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+    border: 2px solid var(--success-color);
+}
+
+.completed-section.hidden {
+    display: none;
+}
+
+.completed-section .section-title {
+    color: var(--success-color);
+    background: rgba(16, 185, 129, 0.1);
+    border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.completed-section .section-title .count {
+    background: var(--success-color);
+    color: white;
+}
+
 .section-title {
     display: flex;
     align-items: center;
@@ -313,6 +399,43 @@ main {
     color: var(--today-color);
     background: rgba(59, 130, 246, 0.1);
     border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+    width: 100%;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color var(--transition-fast);
+}
+
+.section-title:hover {
+    filter: brightness(0.95);
+}
+
+.section-title:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
+}
+
+.section-label {
+    flex: 1;
+}
+
+.collapse-icon {
+    font-size: 0.75rem;
+    transition: transform var(--transition-normal);
+    margin-left: auto;
+}
+
+/* Collapsed state */
+.collapsible-section.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.collapsible-section.collapsed .section-content {
+    display: none;
+}
+
+.collapsible-section.collapsed .section-title {
+    border-bottom: none;
 }
 
 .section-icon {
@@ -524,6 +647,49 @@ main {
     font-weight: 500;
 }
 
+/* Task Meta Container */
+.task-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+/* Effort Badge */
+.effort-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: var(--border-color);
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.75rem;
+}
+
+.effort-badge .effort-icon {
+    font-size: 0.75rem;
+}
+
+/* Edit Effort Input */
+.edit-effort {
+    width: 70px;
+    padding: 0.5rem;
+    border: 2px solid var(--border-color);
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    background: var(--card-bg);
+    color: var(--text-color);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.edit-effort:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
 /* Reminder Bell Icon */
 .reminder-alert {
     display: inline-flex;
@@ -718,41 +884,6 @@ main {
 
 .empty-state p {
     font-size: 1.1rem;
-}
-
-/* ===== Task Actions ===== */
-.task-actions {
-    display: flex;
-    justify-content: center;
-}
-
-.action-btn {
-    padding: 0.75rem 1.5rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--text-secondary);
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-}
-
-.action-btn:hover {
-    color: var(--danger-color);
-    border-color: var(--danger-color);
-    background: rgba(239, 68, 68, 0.05);
-}
-
-.action-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.action-btn:disabled:hover {
-    color: var(--text-secondary);
-    border-color: var(--border-color);
-    background: var(--card-bg);
 }
 
 /* ===== Footer ===== */
@@ -950,10 +1081,6 @@ footer p {
     .cancel-edit-btn {
         width: 100%;
         padding: 0.625rem;
-    }
-    
-    .action-btn {
-        width: 100%;
     }
     
     .empty-state {
@@ -1219,14 +1346,20 @@ footer p {
 
 .dark-mode #task-input,
 .dark-mode #due-date-input,
-.dark-mode #due-time-input {
+.dark-mode #due-time-input,
+.dark-mode #effort-input {
     background: var(--card-bg);
 }
 
 .dark-mode .edit-input,
 .dark-mode .edit-date,
-.dark-mode .edit-time {
+.dark-mode .edit-time,
+.dark-mode .edit-effort {
     background: var(--card-bg);
+}
+
+.dark-mode .effort-badge {
+    background: var(--border-color);
 }
 
 .dark-mode .cancel-edit-btn {
@@ -1237,6 +1370,18 @@ footer p {
 
 .dark-mode .due-today-section {
     background: rgba(59, 130, 246, 0.15);
+}
+
+.dark-mode .past-due-section {
+    background: rgba(236, 72, 153, 0.15);
+}
+
+.dark-mode .upcoming-section {
+    background: rgba(245, 158, 11, 0.15);
+}
+
+.dark-mode .completed-section {
+    background: rgba(16, 185, 129, 0.15);
 }
 
 .dark-mode .task-item.overdue:hover {
@@ -1268,7 +1413,8 @@ footer p {
     
     body:not(.light-mode):not(.dark-mode) #task-input,
     body:not(.light-mode):not(.dark-mode) #due-date-input,
-    body:not(.light-mode):not(.dark-mode) #due-time-input {
+    body:not(.light-mode):not(.dark-mode) #due-time-input,
+    body:not(.light-mode):not(.dark-mode) #effort-input {
         background: var(--card-bg);
     }
     
@@ -1285,7 +1431,6 @@ footer p {
 @media print {
     .task-input,
     .task-filters,
-    .task-actions,
     .delete-btn {
         display: none;
     }
