@@ -38,6 +38,14 @@
                             aria-describedby="input-hint"
                             required
                         >
+                        <div class="due-date-group">
+                            <label for="due-date-input" class="visually-hidden">Due date (optional)</label>
+                            <input 
+                                type="date" 
+                                id="due-date-input" 
+                                aria-label="Due date (optional)"
+                            >
+                        </div>
                         <button type="submit" id="add-btn" aria-label="Add task">
                             <span class="btn-icon" aria-hidden="true">+</span>
                             <span class="btn-text">Add Task</span>
@@ -59,6 +67,17 @@
                         Completed <span class="count" id="count-completed">0</span>
                     </button>
                 </div>
+            </section>
+
+            <section class="due-today-section hidden" aria-label="Tasks due today" id="due-today-section">
+                <h2 class="section-title">
+                    <span class="section-icon" aria-hidden="true">📅</span>
+                    Due Today
+                    <span class="count" id="count-due-today">0</span>
+                </h2>
+                <ul id="due-today-list" class="task-list" role="list" aria-live="polite">
+                    <!-- Tasks due today will be dynamically added here -->
+                </ul>
             </section>
 
             <section class="task-list-section" aria-label="Task list">

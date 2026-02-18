@@ -8,6 +8,11 @@
     --danger-color: #ef4444;
     --danger-hover: #dc2626;
     --warning-color: #f59e0b;
+    --warning-light: #fef3c7;
+    --overdue-color: #ec4899;
+    --overdue-light: #fce7f3;
+    --today-color: #3b82f6;
+    --today-light: #dbeafe;
     
     --bg-color: #f8fafc;
     --card-bg: #ffffff;
@@ -183,6 +188,32 @@ main {
     color: var(--text-muted);
 }
 
+/* ===== Due Date Input ===== */
+.due-date-group {
+    flex-shrink: 0;
+}
+
+#due-date-input {
+    padding: 0.875rem 1rem;
+    font-size: 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--card-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+#due-date-input:hover {
+    border-color: var(--text-muted);
+}
+
+#due-date-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--primary-light);
+}
+
 /* ===== Task Filters ===== */
 .task-filters {
     display: flex;
@@ -240,6 +271,41 @@ main {
     background: var(--bg-color);
     border-radius: var(--radius-full);
     color: var(--text-secondary);
+}
+
+/* ===== Due Today Section ===== */
+.due-today-section {
+    background: var(--today-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+    border: 2px solid var(--today-color);
+}
+
+.due-today-section.hidden {
+    display: none;
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--today-color);
+    background: rgba(59, 130, 246, 0.1);
+    border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.section-icon {
+    font-size: 1.25rem;
+}
+
+.section-title .count {
+    background: var(--today-color);
+    color: white;
 }
 
 /* ===== Task List ===== */
@@ -308,6 +374,41 @@ main {
     color: var(--text-muted);
 }
 
+/* Task Due Date Status Colors */
+.task-item.overdue {
+    background: var(--overdue-light);
+    border-left: 4px solid var(--overdue-color);
+}
+
+.task-item.overdue:hover {
+    background: #fbcfe8;
+}
+
+.task-item.approaching {
+    background: var(--warning-light);
+    border-left: 4px solid var(--warning-color);
+}
+
+.task-item.approaching:hover {
+    background: #fde68a;
+}
+
+.task-item.due-today {
+    background: var(--today-light);
+    border-left: 4px solid var(--today-color);
+}
+
+.task-item.due-today:hover {
+    background: #bfdbfe;
+}
+
+.task-item.completed.overdue,
+.task-item.completed.approaching,
+.task-item.completed.due-today {
+    background: var(--card-bg);
+    border-left: none;
+}
+
 /* Custom Checkbox */
 .task-checkbox {
     position: relative;
@@ -364,12 +465,47 @@ main {
 }
 
 /* Task Text */
-.task-text {
+.task-content {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.task-text {
     font-size: 1rem;
     color: var(--text-primary);
     word-break: break-word;
     transition: color var(--transition-fast), text-decoration var(--transition-fast);
+}
+
+/* Due Date Badge */
+.due-date-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.due-date-badge .due-icon {
+    font-size: 0.875rem;
+}
+
+.due-date-badge.overdue {
+    color: var(--overdue-color);
+    font-weight: 500;
+}
+
+.due-date-badge.approaching {
+    color: var(--warning-color);
+    font-weight: 500;
+}
+
+.due-date-badge.due-today {
+    color: var(--today-color);
+    font-weight: 500;
 }
 
 /* Delete Button */
@@ -605,10 +741,30 @@ footer p {
     --text-muted: #64748b;
     --border-color: #334155;
     --primary-light: rgba(99, 102, 241, 0.2);
+    --overdue-light: rgba(236, 72, 153, 0.2);
+    --warning-light: rgba(245, 158, 11, 0.2);
+    --today-light: rgba(59, 130, 246, 0.2);
 }
 
-.dark-mode #task-input {
+.dark-mode #task-input,
+.dark-mode #due-date-input {
     background: var(--card-bg);
+}
+
+.dark-mode .due-today-section {
+    background: rgba(59, 130, 246, 0.15);
+}
+
+.dark-mode .task-item.overdue:hover {
+    background: rgba(236, 72, 153, 0.3);
+}
+
+.dark-mode .task-item.approaching:hover {
+    background: rgba(245, 158, 11, 0.3);
+}
+
+.dark-mode .task-item.due-today:hover {
+    background: rgba(59, 130, 246, 0.3);
 }
 
 /* System preference fallback (when no manual preference is set) */
@@ -621,9 +777,13 @@ footer p {
         --text-muted: #64748b;
         --border-color: #334155;
         --primary-light: rgba(99, 102, 241, 0.2);
+        --overdue-light: rgba(236, 72, 153, 0.2);
+        --warning-light: rgba(245, 158, 11, 0.2);
+        --today-light: rgba(59, 130, 246, 0.2);
     }
     
-    body:not(.light-mode):not(.dark-mode) #task-input {
+    body:not(.light-mode):not(.dark-mode) #task-input,
+    body:not(.light-mode):not(.dark-mode) #due-date-input {
         background: var(--card-bg);
     }
     
