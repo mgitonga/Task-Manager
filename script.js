@@ -142,14 +142,28 @@ function getTodayString() {
  */
 function getDueDateStatus(task) {
     if (!task.dueDate || task.completed) return null;
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const dueDate = new Date(task.dueDate + 'T00:00:00');
-    const diffTime = dueDate.getTime() - today.getTime();
+
+    // Use UTC-based dates to avoid timezone-related off-by-one errors
+    const now = new Date();
+    const todayUtc = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate()
+    ));
+
+    const [yearStr, monthStr, dayStr] = task.dueDate.split('-');
+    const year = Number(yearStr);
+    const monthIndex = Number(monthStr) - 1; // Month is zero-based in Date.UTC
+    const day = Number(dayStr);
+
+    // Guard against invalid date components
+    if (Number.isNaN(year) || Number.isNaN(monthIndex) || Number.isNaN(day)) {
+        return null;
+    }
+
+    const dueDateUtc = new Date(Date.UTC(year, monthIndex, day));
+    const diffTime = dueDateUtc.getTime() - todayUtc.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
     if (diffDays < 0) return 'overdue';
     if (diffDays === 0) return 'due-today';
     if (diffDays <= 3) return 'approaching';
@@ -284,7 +298,7 @@ function renderTasks() {
  */
 function createTaskElement(task) {
     const li = document.createElement('li');
-    const dueDateStatus = getDueDateStatus(task);
+                <span class="due-icon">📅</span>
     let className = 'task-item';
     if (task.completed) className += ' completed';
     if (dueDateStatus) className += ` ${dueDateStatus}`;
