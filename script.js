@@ -22,6 +22,23 @@ const emptyState = document.getElementById('empty-state');
 const filterButtons = document.querySelectorAll('.filter-btn');
 const themeToggle = document.getElementById('theme-toggle');
 
+// View toggle elements
+const viewToggleButtons = document.querySelectorAll('.view-toggle-btn');
+const listView = document.getElementById('list-view');
+const timelineView = document.getElementById('timeline-view');
+
+// Timeline elements
+const timelineContainer = document.getElementById('timeline-container');
+const timelineSidebar = document.getElementById('timeline-sidebar');
+const timelineScrollArea = document.getElementById('timeline-scroll-area');
+const timelineHeader = document.getElementById('timeline-header');
+const timelineBody = document.getElementById('timeline-body');
+const timelineNow = document.getElementById('timeline-now');
+const zoomLevelDisplay = document.getElementById('zoom-level');
+const zoomButtons = document.querySelectorAll('.zoom-btn');
+const navButtons = document.querySelectorAll('.nav-btn');
+const unscheduledList = document.getElementById('unscheduled-list');
+
 // Count elements
 const countAll = document.getElementById('count-all');
 const countActive = document.getElementById('count-active');
@@ -34,11 +51,26 @@ const countCompletedSection = document.getElementById('count-completed-section')
 // ===== State =====
 let tasks = [];
 let currentFilter = 'all';
+let currentView = 'list'; // 'list' or 'timeline'
+
+// Timeline state
+const ZOOM_LEVELS = ['hour', 'day', 'week'];
+let currentZoomLevel = 1; // Index into ZOOM_LEVELS (default: 'day')
+let timelineStartDate = new Date();
+let isDragging = false;
+let isResizing = false;
+let dragTask = null;
+let dragStartX = 0;
+let dragStartLeft = 0;
+let dragStartWidth = 0;
+let resizeHandle = null;
+let dropZonesInitialized = false;
 
 // ===== Local Storage =====
 const STORAGE_KEY = 'taskManager_tasks';
 const THEME_KEY = 'taskManager_theme';
 const COLLAPSED_KEY = 'taskManager_collapsed';
+const VIEW_KEY = 'taskManager_view';
 
 /**
  * Load tasks from local storage
@@ -96,6 +128,9 @@ function addTask(text, dueDate = null, dueTime = null, effort = null) {
     tasks.unshift(task); // Add to beginning of array
     saveTasks();
     renderTasks();
+    if (currentView === 'timeline') {
+        renderTimeline();
+    }
     const dueDateTimeStr = formatDateTimeForDisplay(dueDate, dueTime);
     const effortStr = effort ? ` (${effort}h effort)` : '';
     announceToScreenReader(`Task "${text}" added${dueDateTimeStr ? ` due ${dueDateTimeStr}` : ''}${effortStr}`);
@@ -111,6 +146,9 @@ function deleteTask(id) {
         tasks = tasks.filter(t => t.id !== id);
         saveTasks();
         renderTasks();
+        if (currentView === 'timeline') {
+            renderTimeline();
+        }
         announceToScreenReader(`Task "${task.text}" deleted`);
     }
 }
@@ -125,6 +163,9 @@ function toggleTask(id) {
         task.completed = !task.completed;
         saveTasks();
         renderTasks();
+        if (currentView === 'timeline') {
+            renderTimeline();
+        }
         announceToScreenReader(`Task "${task.text}" marked as ${task.completed ? 'completed' : 'active'}`);
     }
 }
@@ -140,6 +181,9 @@ function updateTask(id, updates) {
         Object.assign(task, updates);
         saveTasks();
         renderTasks();
+        if (currentView === 'timeline') {
+            renderTimeline();
+        }
         announceToScreenReader(`Task updated`);
     }
 }
@@ -414,6 +458,9 @@ function setFilter(filter) {
     });
     
     renderTasks();
+    if (currentView === 'timeline') {
+        renderTimeline();
+    }
 }
 
 // ===== Rendering =====
@@ -802,12 +849,686 @@ function setupCollapsibleSections() {
     });
 }
 
+// ===== View Toggle =====
+/**
+ * Load saved view preference
+ */
+function loadView() {
+    try {
+        const savedView = localStorage.getItem(VIEW_KEY);
+        if (savedView && (savedView === 'list' || savedView === 'timeline')) {
+            currentView = savedView;
+        }
+    } catch (error) {
+        console.error('Error loading view preference:', error);
+    }
+}
+
+/**
+ * Switch between list and timeline views
+ * @param {string} view - 'list' or 'timeline'
+ */
+function setView(view) {
+    currentView = view;
+    
+    // Update button states
+    viewToggleButtons.forEach(btn => {
+        const isActive = btn.dataset.view === view;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-pressed', isActive);
+    });
+    
+    // Toggle view visibility
+    if (view === 'timeline') {
+        listView.classList.add('hidden');
+        timelineView.classList.remove('hidden');
+        renderTimeline();
+    } else {
+        timelineView.classList.add('hidden');
+        listView.classList.remove('hidden');
+    }
+    
+    // Save preference
+    try {
+        localStorage.setItem(VIEW_KEY, view);
+    } catch (error) {
+        console.error('Error saving view preference:', error);
+    }
+    
+    announceToScreenReader(`${view === 'timeline' ? 'Timeline' : 'List'} view activated`);
+}
+
+/**
+ * Setup view toggle event listeners
+ */
+function setupViewToggle() {
+    viewToggleButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            setView(btn.dataset.view);
+        });
+    });
+}
+
+// ===== Timeline View =====
+/**
+ * Get timeline configuration based on zoom level
+ */
+function getTimelineConfig() {
+    const zoom = ZOOM_LEVELS[currentZoomLevel];
+    const config = {
+        zoom,
+        cellWidth: 0,
+        cellCount: 0,
+        format: '',
+        msPerCell: 0
+    };
+    
+    switch (zoom) {
+        case 'hour':
+            config.cellWidth = 60;
+            config.cellCount = 24;
+            config.format = 'hour';
+            config.msPerCell = 60 * 60 * 1000; // 1 hour
+            break;
+        case 'day':
+            config.cellWidth = 100;
+            config.cellCount = 14; // 2 weeks
+            config.format = 'day';
+            config.msPerCell = 24 * 60 * 60 * 1000; // 1 day
+            break;
+        case 'week':
+            config.cellWidth = 120;
+            config.cellCount = 8; // 2 months
+            config.format = 'week';
+            config.msPerCell = 7 * 24 * 60 * 60 * 1000; // 1 week
+            break;
+    }
+    
+    return config;
+}
+
+/**
+ * Get the start of the timeline based on zoom level
+ */
+function getTimelineStart() {
+    const now = new Date();
+    const zoom = ZOOM_LEVELS[currentZoomLevel];
+    
+    switch (zoom) {
+        case 'hour':
+            // Start at beginning of current day
+            return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        case 'day':
+            // Start 3 days ago
+            const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            dayStart.setDate(dayStart.getDate() - 3);
+            return dayStart;
+        case 'week':
+            // Start at beginning of current week (Sunday)
+            const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            weekStart.setDate(weekStart.getDate() - weekStart.getDay() - 7);
+            return weekStart;
+    }
+    
+    return now;
+}
+
+/**
+ * Format header cell based on zoom level
+ */
+function formatHeaderCell(date, zoom) {
+    switch (zoom) {
+        case 'hour':
+            return date.getHours().toString().padStart(2, '0') + ':00';
+        case 'day':
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            return `${days[date.getDay()]} ${date.getDate()}`;
+        case 'week':
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return `${months[date.getMonth()]} ${date.getDate()}`;
+    }
+    return '';
+}
+
+/**
+ * Check if a date is today
+ */
+function isToday(date) {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+}
+
+/**
+ * Check if a date is a weekend
+ */
+function isWeekend(date) {
+    const day = date.getDay();
+    return day === 0 || day === 6;
+}
+
+/**
+ * Calculate task bar position and width
+ */
+function calculateTaskBarPosition(task, config, startTime) {
+    const effort = task.effort || 1; // Default 1 hour
+    const endTime = startTime.getTime() + (config.cellCount * config.msPerCell);
+    
+    // Calculate due date/time
+    let dueDateTime;
+    if (task.dueDate) {
+        const timeStr = task.dueTime || '23:59';
+        dueDateTime = new Date(task.dueDate + 'T' + timeStr + ':00');
+    } else {
+        return null; // No due date
+    }
+    
+    // Calculate start time (due time - effort)
+    const taskStartTime = new Date(dueDateTime.getTime() - (effort * 60 * 60 * 1000));
+    
+    // Check if task is visible in current view
+    if (taskStartTime.getTime() > endTime || dueDateTime.getTime() < startTime.getTime()) {
+        return null; // Task is outside visible range
+    }
+    
+    // Calculate left position (pixels from start)
+    const leftMs = Math.max(0, taskStartTime.getTime() - startTime.getTime());
+    const leftPx = (leftMs / config.msPerCell) * config.cellWidth;
+    
+    // Calculate width (effort in hours to pixels)
+    const widthMs = effort * 60 * 60 * 1000;
+    const widthPx = Math.max(20, (widthMs / config.msPerCell) * config.cellWidth);
+    
+    return { left: leftPx, width: widthPx, startTime: taskStartTime, endTime: dueDateTime };
+}
+
+/**
+ * Get task status class for timeline bar
+ */
+function getTaskStatusClass(task) {
+    if (task.completed) return 'completed';
+    if (!task.dueDate) return 'no-date';
+    
+    const status = getDueDateStatus(task);
+    if (status === 'overdue') return 'overdue';
+    if (status === 'due-today') return 'due-today';
+    if (status === 'approaching') return 'approaching';
+    return 'upcoming';
+}
+
+/**
+ * Render the timeline header
+ */
+function renderTimelineHeader(config, startTime) {
+    timelineHeader.innerHTML = '';
+    timelineHeader.style.width = `${config.cellWidth * config.cellCount}px`;
+    
+    for (let i = 0; i < config.cellCount; i++) {
+        const cellDate = new Date(startTime.getTime() + (i * config.msPerCell));
+        const cell = document.createElement('div');
+        cell.className = 'timeline-header-cell';
+        cell.style.width = `${config.cellWidth}px`;
+        cell.textContent = formatHeaderCell(cellDate, config.zoom);
+        
+        if (isToday(cellDate)) {
+            cell.classList.add('today');
+        }
+        if (isWeekend(cellDate) && config.zoom !== 'hour') {
+            cell.classList.add('weekend');
+        }
+        
+        timelineHeader.appendChild(cell);
+    }
+}
+
+/**
+ * Render the timeline sidebar (task names)
+ */
+function renderTimelineSidebar(scheduledTasks) {
+    timelineSidebar.innerHTML = '';
+    
+    // Add header spacer to align with timeline header
+    const spacer = document.createElement('div');
+    spacer.className = 'timeline-sidebar-header';
+    timelineSidebar.appendChild(spacer);
+    
+    scheduledTasks.forEach(task => {
+        const label = document.createElement('div');
+        label.className = 'timeline-task-label';
+        if (task.completed) label.classList.add('completed');
+        label.textContent = task.text;
+        label.title = task.text;
+        timelineSidebar.appendChild(label);
+    });
+}
+
+/**
+ * Render the timeline body (task bars)
+ */
+function renderTimelineBody(scheduledTasks, config, startTime) {
+    timelineBody.innerHTML = '';
+    timelineBody.style.width = `${config.cellWidth * config.cellCount}px`;
+    
+    // Add grid lines
+    for (let i = 0; i <= config.cellCount; i++) {
+        const gridLine = document.createElement('div');
+        gridLine.className = 'timeline-grid-line';
+        gridLine.style.left = `${i * config.cellWidth}px`;
+        
+        const cellDate = new Date(startTime.getTime() + (i * config.msPerCell));
+        if (isToday(cellDate)) {
+            gridLine.classList.add('today');
+        }
+        
+        timelineBody.appendChild(gridLine);
+    }
+    
+    // Render task rows and bars
+    scheduledTasks.forEach((task, index) => {
+        const row = document.createElement('div');
+        row.className = 'timeline-row';
+        row.dataset.taskId = task.id;
+        
+        const position = calculateTaskBarPosition(task, config, startTime);
+        if (position) {
+            const bar = document.createElement('div');
+            bar.className = `timeline-bar ${getTaskStatusClass(task)}`;
+            bar.style.left = `${position.left}px`;
+            bar.style.width = `${position.width}px`;
+            bar.dataset.taskId = task.id;
+            bar.setAttribute('tabindex', '0');
+            bar.setAttribute('role', 'button');
+            bar.setAttribute('aria-label', `${task.text}, ${task.effort || 1} hours effort`);
+            
+            // Add resize handles
+            const leftHandle = document.createElement('div');
+            leftHandle.className = 'timeline-bar-handle left';
+            leftHandle.dataset.handle = 'left';
+            
+            const rightHandle = document.createElement('div');
+            rightHandle.className = 'timeline-bar-handle right';
+            rightHandle.dataset.handle = 'right';
+            
+            const textSpan = document.createElement('span');
+            textSpan.className = 'timeline-bar-text';
+            textSpan.textContent = task.text;
+            
+            bar.appendChild(leftHandle);
+            bar.appendChild(textSpan);
+            bar.appendChild(rightHandle);
+            
+            // Add event listeners for drag and resize
+            bar.addEventListener('mousedown', (e) => handleBarMouseDown(e, task, config, startTime));
+            bar.addEventListener('touchstart', (e) => handleBarTouchStart(e, task, config, startTime), { passive: false });
+            
+            // Keyboard navigation
+            bar.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    enterEditMode(task.id);
+                } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                    e.preventDefault();
+                    deleteTask(task.id);
+                }
+            });
+            
+            // Tooltip on hover
+            bar.addEventListener('mouseenter', (e) => showTooltip(e, task));
+            bar.addEventListener('mouseleave', hideTooltip);
+            
+            row.appendChild(bar);
+        }
+        
+        timelineBody.appendChild(row);
+    });
+}
+
+/**
+ * Render the now indicator
+ */
+function renderNowIndicator(config, startTime) {
+    const now = new Date();
+    const endTime = startTime.getTime() + (config.cellCount * config.msPerCell);
+    
+    if (now.getTime() >= startTime.getTime() && now.getTime() <= endTime) {
+        const leftMs = now.getTime() - startTime.getTime();
+        const leftPx = (leftMs / config.msPerCell) * config.cellWidth;
+        timelineNow.style.left = `${leftPx + 150}px`; // +150 for sidebar width
+        timelineNow.style.display = 'block';
+    } else {
+        timelineNow.style.display = 'none';
+    }
+}
+
+/**
+ * Render unscheduled tasks
+ */
+function renderUnscheduledTasks() {
+    const filteredTasks = getFilteredTasks();
+    const unscheduledTasks = filteredTasks.filter(t => !t.dueDate);
+    
+    unscheduledList.innerHTML = '';
+    
+    if (unscheduledTasks.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'unscheduled-empty';
+        empty.textContent = 'No unscheduled tasks';
+        unscheduledList.appendChild(empty);
+        return;
+    }
+    
+    unscheduledTasks.forEach(task => {
+        const item = document.createElement('div');
+        item.className = 'unscheduled-item';
+        if (task.completed) item.classList.add('completed');
+        item.dataset.taskId = task.id;
+        item.draggable = true;
+        item.textContent = task.text;
+        item.title = `${task.text}${task.effort ? ` (${task.effort}h)` : ''}`;
+        
+        // Drag events
+        item.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', task.id);
+            item.classList.add('dragging');
+        });
+        
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+        });
+        
+        unscheduledList.appendChild(item);
+    });
+}
+
+/**
+ * Main timeline render function
+ */
+function renderTimeline() {
+    if (currentView !== 'timeline') return;
+    
+    const config = getTimelineConfig();
+    timelineStartDate = getTimelineStart();
+    
+    // Update zoom level display
+    const zoomLabels = { hour: 'Hour', day: 'Day', week: 'Week' };
+    zoomLevelDisplay.textContent = zoomLabels[config.zoom];
+    
+    // Get scheduled tasks (with due date)
+    const filteredTasks = getFilteredTasks();
+    const scheduledTasks = filteredTasks.filter(t => t.dueDate);
+    
+    // Render components
+    renderTimelineHeader(config, timelineStartDate);
+    renderTimelineSidebar(scheduledTasks);
+    renderTimelineBody(scheduledTasks, config, timelineStartDate);
+    renderNowIndicator(config, timelineStartDate);
+    renderUnscheduledTasks();
+    
+    // Setup drop zones for unscheduled tasks
+    setupTimelineDropZones();
+}
+
+/**
+ * Setup timeline drop zones for drag and drop
+ */
+function setupTimelineDropZones() {
+    // Only setup once to prevent duplicate listeners
+    if (dropZonesInitialized) return;
+    dropZonesInitialized = true;
+    
+    const scrollArea = timelineScrollArea;
+    
+    scrollArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    });
+    
+    scrollArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const taskId = e.dataTransfer.getData('text/plain');
+        if (!taskId) return;
+        
+        // Get current config at drop time
+        const config = getTimelineConfig();
+        
+        // Calculate drop position to date
+        const rect = scrollArea.getBoundingClientRect();
+        const scrollLeft = scrollArea.scrollLeft;
+        const x = e.clientX - rect.left + scrollLeft;
+        
+        const msOffset = (x / config.cellWidth) * config.msPerCell;
+        const dropDate = new Date(timelineStartDate.getTime() + msOffset);
+        
+        // Format as YYYY-MM-DD
+        const dateString = dropDate.toISOString().split('T')[0];
+        
+        // Update task (this will call renderTimeline)
+        updateTask(taskId, { dueDate: dateString });
+    });
+}
+
+// ===== Timeline Interaction (Drag & Resize) =====
+let tooltipElement = null;
+
+/**
+ * Show tooltip for task bar
+ */
+function showTooltip(e, task) {
+    hideTooltip();
+    
+    tooltipElement = document.createElement('div');
+    tooltipElement.className = 'timeline-tooltip';
+    
+    const effort = task.effort || 1;
+    const status = getTaskStatusClass(task);
+    const statusLabels = {
+        completed: 'Completed',
+        overdue: 'Overdue',
+        'due-today': 'Due Today',
+        approaching: 'Approaching',
+        upcoming: 'Upcoming',
+        'no-date': 'No Due Date'
+    };
+    
+    tooltipElement.innerHTML = `
+        <div class="timeline-tooltip-title">${escapeHtml(task.text)}</div>
+        <div class="timeline-tooltip-detail">Due: ${formatDateTimeForDisplay(task.dueDate, task.dueTime) || 'Not set'}</div>
+        <div class="timeline-tooltip-detail">Effort: ${effort}h</div>
+        <div class="timeline-tooltip-detail">Status: ${statusLabels[status]}</div>
+    `;
+    
+    document.body.appendChild(tooltipElement);
+    
+    // Position tooltip
+    const rect = e.target.getBoundingClientRect();
+    tooltipElement.style.left = `${rect.left}px`;
+    tooltipElement.style.top = `${rect.bottom + 5}px`;
+}
+
+/**
+ * Hide tooltip
+ */
+function hideTooltip() {
+    if (tooltipElement) {
+        tooltipElement.remove();
+        tooltipElement = null;
+    }
+}
+
+/**
+ * Handle mouse down on task bar
+ */
+function handleBarMouseDown(e, task, config, startTime) {
+    if (e.target.classList.contains('timeline-bar-handle')) {
+        // Start resize
+        isResizing = true;
+        resizeHandle = e.target.dataset.handle;
+        dragTask = task;
+        dragStartX = e.clientX;
+        dragStartLeft = parseFloat(e.target.parentElement.style.left);
+        dragStartWidth = parseFloat(e.target.parentElement.style.width);
+    } else {
+        // Start drag
+        isDragging = true;
+        dragTask = task;
+        dragStartX = e.clientX;
+        dragStartLeft = parseFloat(e.target.style.left);
+    }
+    
+    e.target.style.cursor = isResizing ? 'ew-resize' : 'grabbing';
+    
+    const handleMouseMove = (moveEvent) => {
+        const deltaX = moveEvent.clientX - dragStartX;
+        const bar = document.querySelector(`.timeline-bar[data-task-id="${task.id}"]`);
+        
+        if (!bar) return;
+        
+        if (isResizing) {
+            if (resizeHandle === 'right') {
+                // Resize from right (change effort)
+                const newWidth = Math.max(20, dragStartWidth + deltaX);
+                bar.style.width = `${newWidth}px`;
+            } else {
+                // Resize from left (change start time and effort)
+                const newLeft = dragStartLeft + deltaX;
+                const newWidth = Math.max(20, dragStartWidth - deltaX);
+                bar.style.left = `${newLeft}px`;
+                bar.style.width = `${newWidth}px`;
+            }
+        } else if (isDragging) {
+            const newLeft = dragStartLeft + deltaX;
+            bar.style.left = `${newLeft}px`;
+        }
+    };
+    
+    const handleMouseUp = (upEvent) => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        
+        if (!dragTask) return;
+        
+        const bar = document.querySelector(`.timeline-bar[data-task-id="${task.id}"]`);
+        if (!bar) return;
+        
+        bar.style.cursor = 'grab';
+        
+        const finalLeft = parseFloat(bar.style.left);
+        const finalWidth = parseFloat(bar.style.width);
+        
+        // Calculate new effort from width
+        const effortMs = (finalWidth / config.cellWidth) * config.msPerCell;
+        const newEffort = Math.max(0.5, Math.round((effortMs / (60 * 60 * 1000)) * 2) / 2); // Round to 0.5
+        
+        // Calculate new due date/time from position + width
+        const endMs = ((finalLeft + finalWidth) / config.cellWidth) * config.msPerCell;
+        const endDate = new Date(startTime.getTime() + endMs);
+        const newDueDate = endDate.toISOString().split('T')[0];
+        const newDueTime = endDate.getHours().toString().padStart(2, '0') + ':' + 
+                          (Math.round(endDate.getMinutes() / 30) * 30).toString().padStart(2, '0');
+        
+        // Update task
+        const updates = {};
+        if (isDragging || isResizing) {
+            updates.dueDate = newDueDate;
+            if (config.zoom === 'hour') {
+                updates.dueTime = newDueTime === '24:00' ? '23:30' : newDueTime;
+            }
+        }
+        if (isResizing) {
+            updates.effort = newEffort;
+        }
+        
+        if (Object.keys(updates).length > 0) {
+            updateTask(task.id, updates);
+        }
+        
+        isDragging = false;
+        isResizing = false;
+        dragTask = null;
+        resizeHandle = null;
+        
+        renderTimeline();
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+}
+
+/**
+ * Handle touch start on task bar (mobile)
+ */
+function handleBarTouchStart(e, task, config, startTime) {
+    if (e.touches.length !== 1) return;
+    
+    const touch = e.touches[0];
+    const fakeMouseEvent = {
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        target: e.target,
+        preventDefault: () => e.preventDefault()
+    };
+    
+    handleBarMouseDown(fakeMouseEvent, task, config, startTime);
+}
+
+/**
+ * Setup timeline zoom controls
+ */
+function setupTimelineZoom() {
+    zoomButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const direction = btn.dataset.zoom;
+            if (direction === 'in' && currentZoomLevel > 0) {
+                currentZoomLevel--;
+            } else if (direction === 'out' && currentZoomLevel < ZOOM_LEVELS.length - 1) {
+                currentZoomLevel++;
+            }
+            renderTimeline();
+        });
+    });
+}
+
+/**
+ * Setup timeline navigation controls
+ */
+function setupTimelineNav() {
+    navButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.dataset.nav;
+            const config = getTimelineConfig();
+            
+            if (action === 'today') {
+                timelineStartDate = getTimelineStart();
+            } else if (action === 'prev') {
+                timelineStartDate = new Date(timelineStartDate.getTime() - (config.cellCount / 2 * config.msPerCell));
+            } else if (action === 'next') {
+                timelineStartDate = new Date(timelineStartDate.getTime() + (config.cellCount / 2 * config.msPerCell));
+            }
+            
+            renderTimeline();
+        });
+    });
+}
+
 // ===== Initialization =====
 function init() {
     loadTheme();
     loadTasks();
+    loadView();
     loadCollapsedSections();
     setupCollapsibleSections();
+    setupViewToggle();
+    setupTimelineZoom();
+    setupTimelineNav();
+    
+    // Sync sidebar scroll with timeline scroll area
+    timelineScrollArea.addEventListener('scroll', () => {
+        timelineSidebar.scrollTop = timelineScrollArea.scrollTop;
+    });
+    
+    // Apply saved view
+    setView(currentView);
     renderTasks();
     
     // Track the current date to detect date changes
@@ -821,6 +1542,9 @@ function init() {
         if (currentDateString !== lastDateString) {
             lastDateString = currentDateString;
             renderTasks();
+            if (currentView === 'timeline') {
+                renderTimeline();
+            }
             return;
         }
         
@@ -828,6 +1552,12 @@ function init() {
         const hasUpcomingTasks = tasks.some(t => getTimeStatus(t) !== null);
         if (hasUpcomingTasks) {
             renderTasks();
+        }
+        
+        // Update now indicator in timeline
+        if (currentView === 'timeline') {
+            const config = getTimelineConfig();
+            renderNowIndicator(config, timelineStartDate);
         }
     }, 60000); // Check every minute
     

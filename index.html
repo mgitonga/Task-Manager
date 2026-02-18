@@ -137,8 +137,58 @@
                         Completed <span class="count" id="count-completed">0</span>
                     </button>
                 </div>
+                <div class="view-toggle-group" role="group" aria-label="View toggle">
+                    <button class="view-toggle-btn active" data-view="list" aria-pressed="true" title="List View">
+                        <span aria-hidden="true">📋</span>
+                        <span class="visually-hidden">List View</span>
+                    </button>
+                    <button class="view-toggle-btn" data-view="timeline" aria-pressed="false" title="Timeline View">
+                        <span aria-hidden="true">📊</span>
+                        <span class="visually-hidden">Timeline View</span>
+                    </button>
+                </div>
             </section>
 
+            <!-- Timeline View -->
+            <section class="timeline-view hidden" id="timeline-view" aria-label="Timeline view">
+                <div class="timeline-controls">
+                    <div class="timeline-zoom">
+                        <button class="zoom-btn" data-zoom="out" aria-label="Zoom out" title="Zoom out">−</button>
+                        <span class="zoom-level" id="zoom-level">Day</span>
+                        <button class="zoom-btn" data-zoom="in" aria-label="Zoom in" title="Zoom in">+</button>
+                    </div>
+                    <div class="timeline-nav">
+                        <button class="nav-btn" data-nav="prev" aria-label="Previous" title="Previous">←</button>
+                        <button class="nav-btn" data-nav="today" aria-label="Go to today" title="Today">Today</button>
+                        <button class="nav-btn" data-nav="next" aria-label="Next" title="Next">→</button>
+                    </div>
+                </div>
+                <div class="timeline-container" id="timeline-container">
+                    <div class="timeline-sidebar" id="timeline-sidebar">
+                        <!-- Task names will be shown here -->
+                    </div>
+                    <div class="timeline-scroll-area" id="timeline-scroll-area">
+                        <div class="timeline-header" id="timeline-header">
+                            <!-- Time scale headers will be generated here -->
+                        </div>
+                        <div class="timeline-body" id="timeline-body">
+                            <!-- Task bars will be generated here -->
+                        </div>
+                        <div class="timeline-now-indicator" id="timeline-now"></div>
+                    </div>
+                </div>
+                <div class="unscheduled-tasks" id="unscheduled-tasks">
+                    <h3 class="unscheduled-title">
+                        <span aria-hidden="true">📅</span> Unscheduled Tasks
+                    </h3>
+                    <div class="unscheduled-list" id="unscheduled-list">
+                        <!-- Unscheduled tasks will be shown here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- List View -->
+            <div class="list-view" id="list-view">
             <section class="past-due-section hidden collapsible-section" aria-label="Past due tasks" id="past-due-section">
                 <button class="section-title" aria-expanded="true" aria-controls="past-due-list">
                     <span class="section-icon" aria-hidden="true">⚠️</span>
@@ -196,6 +246,7 @@
                     <p>No tasks yet. Add one above!</p>
                 </div>
             </section>
+            </div><!-- End List View -->
         </main>
 
         <footer>
