@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A modern task manager application to organize your daily tasks">
+    <title>Task Manager</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <h1>Task Manager</h1>
+                <button 
+                    id="theme-toggle" 
+                    class="theme-toggle" 
+                    aria-label="Toggle dark mode"
+                    title="Toggle dark mode"
+                >
+                    <span class="theme-icon sun" aria-hidden="true">☀️</span>
+                    <span class="theme-icon moon" aria-hidden="true">🌙</span>
+                </button>
+            </div>
+            <p class="subtitle">Organize your day, one task at a time</p>
+        </header>
+
+        <main>
+            <section class="task-input" aria-label="Add new task">
+                <form id="task-form" role="form">
+                    <div class="input-group">
+                        <label for="task-input" class="visually-hidden">Enter a new task</label>
+                        <input 
+                            type="text" 
+                            id="task-input" 
+                            placeholder="What needs to be done?" 
+                            autocomplete="off"
+                            aria-describedby="input-hint"
+                            required
+                        >
+                        <button type="submit" id="add-btn" aria-label="Add task">
+                            <span class="btn-icon" aria-hidden="true">+</span>
+                            <span class="btn-text">Add Task</span>
+                        </button>
+                    </div>
+                    <p id="input-hint" class="hint">Press Enter or click Add Task to add</p>
+                </form>
+            </section>
+
+            <section class="task-filters" aria-label="Filter tasks">
+                <div class="filter-group" role="group" aria-label="Task filters">
+                    <button class="filter-btn active" data-filter="all" aria-pressed="true">
+                        All <span class="count" id="count-all">0</span>
+                    </button>
+                    <button class="filter-btn" data-filter="active" aria-pressed="false">
+                        Active <span class="count" id="count-active">0</span>
+                    </button>
+                    <button class="filter-btn" data-filter="completed" aria-pressed="false">
+                        Completed <span class="count" id="count-completed">0</span>
+                    </button>
+                </div>
+            </section>
+
+            <section class="task-list-section" aria-label="Task list">
+                <ul id="task-list" class="task-list" role="list" aria-live="polite">
+                    <!-- Tasks will be dynamically added here -->
+                </ul>
+                <div id="empty-state" class="empty-state" aria-live="polite">
+                    <div class="empty-icon" aria-hidden="true">📋</div>
+                    <p>No tasks yet. Add one above!</p>
+                </div>
+            </section>
+
+            <section class="task-actions" aria-label="Bulk actions">
+                <button id="clear-completed" class="action-btn" aria-label="Clear all completed tasks">
+                    Clear Completed
+                </button>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2026 Task Manager. Built with accessibility in mind.</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
